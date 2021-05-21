@@ -73,7 +73,10 @@ def train_epoch(model, data_loader, loss_fn, optimizer, device, scheduler):
 
     # Epoch level metrics (also return best threshold)
     acc_score_epoch, best_f1_epoch, auc_score_epoch, best_threshold_epoch = \
-        calculate_metrics(y_true=target_list, probas_pred=pred_prob_list)
+        calculate_metrics(
+            y_true=np.concatenate(target_list), 
+            probas_pred=np.concatenate(pred_prob_list)
+        )
 
     loss_epoch = np.mean(losses)
 
@@ -124,7 +127,11 @@ def eval_model(model, data_loader, loss_fn, device, best_threshold):
 
     # Epoch level metrics (use threshold from training to make predictions)
     acc_score_epoch, best_f1_epoch, auc_score_epoch, _ = \
-        calculate_metrics(y_true=target_list, probas_pred=pred_prob_list, best_threshold=best_threshold)
+        calculate_metrics(
+            y_true=np.concatenate(target_list), 
+            probas_pred=np.concatenate(pred_prob_list), 
+            best_threshold=best_threshold
+            )
 
     loss_epoch = np.mean(losses)
 
@@ -235,13 +242,9 @@ def pred_model(model, data_loader, device, best_threshold):
             # make predictions
             pred_prob = F.softmax(outputs, 1)[:, 1]
 
-            # detach tensors for metrics
-            target_np = target.detach().numpy()
-            pred_prob_np = pred_prob.detach().numpy()
-
             # collect targets and predicted prob for epoch level metrics
-            target_list.append(target_np)
-            pred_prob_list.append(pred_prob_np)
+            target_list.append(target)
+            pred_prob_list.append(pred_prob)
             attn_wts_list.append(model.attention.att_weights)
             input_ids_list.append(input_ids)
 
