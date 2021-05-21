@@ -12,7 +12,7 @@ def calculate_metrics(y_true, probas_pred, best_threshold=None):
     if best_threshold is None:
         # calculate precision, recall, f1 with varying thresholds
         f1_score_ = 2*((precision*recall)/(precision+recall))
-        metric_df = pd.DataFrame({'precision':precision, 'recall':recall, 'f1_score':f1_score_, 'threshold':threshold})
+        metric_df = pd.DataFrame({'precision':precision[1:], 'recall':recall[1:], 'f1_score':f1_score_[1:], 'threshold':threshold})
         metric_df = metric_df.sort_values('f1_score', ascending = False)
         
         # get threshold based on best F1
