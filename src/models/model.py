@@ -42,6 +42,27 @@ class HIBERT(nn.Module):
         self.bert = BertModel.from_pretrained(PRE_TRAINED_MODEL_NAME, return_dict=False, add_pooling_layer=False)
         self.fc_in_size = self.bert.config.hidden_size
 
+        # Control layer freezing
+        if freeze_layer_count == -1:
+            # freeze all bert layers
+            for param in self.bert.parameters():
+                param.requires_grad = False
+
+        if freeze_layer_count == -2:
+            # unfreeze all bert layers
+            for param in self.bert.parameters():
+                param.requires_grad = True
+
+        if freeze_layer_count > 0:
+            # freeze embedding layer
+            for param in self.bert.embeddings.parameters():
+                param.requires_grad = False
+
+            # freeze the top `freeze_layer_count` encoder layers
+            for layer in self.bert.encoder.layer[:freeze_layer_count]:
+                for param in layer.parameters():
+                    param.requires_grad = False
+
         # Attention pooling layer
         self.attention = Attention(dim=self.bert.config.hidden_size, attn_bias=self.attn_bias)
 
