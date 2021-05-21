@@ -22,7 +22,7 @@ def train_epoch(model, data_loader, loss_fn, optimizer, device, scheduler):
 
     # training loop for one epoch
     for d in data_loader:
-        input_ids = d['input_ids'].to(device)
+        input_ids = d['input_ids'].type(torch.LongTensor).to(device)
         attention_mask = d['attention_mask'].to(device)
         n_chunks = d['n_chunks'].to(device)
         target = d['target'].to(device)
@@ -43,7 +43,7 @@ def train_epoch(model, data_loader, loss_fn, optimizer, device, scheduler):
 
         # compulsory steps
         optimizer.zero_grad()
-        loss.backwards()
+        loss.backward()
 
         # clip gradients
         nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -83,7 +83,7 @@ def train_epoch(model, data_loader, loss_fn, optimizer, device, scheduler):
 # evaluate model on validation set (based on best threshold)
 def eval_model(model, data_loader, loss_fn, device, best_threshold):
 
-    # Set to training mode
+    # Turn on evaluation mode which disables dropout.
     model = model.eval()
 
     losses = []
@@ -91,33 +91,36 @@ def eval_model(model, data_loader, loss_fn, device, best_threshold):
     target_list = []
 
     # evaluate model through the validation set
-    for d in data_loader:
-        input_ids = d['input_ids'].to(device)
-        attention_mask = d['attention_mask'].to(device)
-        n_chunks = d['n_chunks'].to(device)
-        target = d['target'].to(device)
+    # torch.no_grad() for speed and also since backprop is not needed
+    with torch.no_grad():
 
-        # pass through model
-        outputs = model(
-            input_ids = input_ids, 
-            attention_mask = attention_mask, 
-            n_chunks = n_chunks
-        )
+        for d in data_loader:
+            input_ids = d['input_ids'].type(torch.LongTensor).to(device)
+            attention_mask = d['attention_mask'].to(device)
+            n_chunks = d['n_chunks'].to(device)
+            target = d['target'].to(device)
 
-        # make predictions and calculate loss
-        pred_prob = F.softmax(outputs, 1)[:, 1]
-        loss = loss_fn(outputs, target)
+            # pass through model
+            outputs = model(
+                input_ids = input_ids, 
+                attention_mask = attention_mask, 
+                n_chunks = n_chunks
+            )
 
-        # collect loss
-        losses.append(loss.item())
+            # make predictions and calculate loss
+            pred_prob = F.softmax(outputs, 1)[:, 1]
+            loss = loss_fn(outputs, target)
 
-        # detach tensors for metrics
-        target_np = target.detach().numpy()
-        pred_prob_np = pred_prob.detach().numpy()
+            # collect loss
+            losses.append(loss.item())
 
-        # collect targets and predicted prob for epoch level metrics
-        target_list.append(target_np)
-        pred_prob_list.append(pred_prob_np)
+            # detach tensors for metrics
+            target_np = target.detach().numpy()
+            pred_prob_np = pred_prob.detach().numpy()
+
+            # collect targets and predicted prob for epoch level metrics
+            target_list.append(target_np)
+            pred_prob_list.append(pred_prob_np)
 
     # Epoch level metrics (use threshold from training to make predictions)
     acc_score_epoch, best_f1_epoch, auc_score_epoch, _ = \
@@ -198,3 +201,63 @@ def train_model(epochs, model, train_data_loader, val_data_loader, loss_fn, opti
             
             # update f1
             best_f1 = val_f1
+
+
+
+# Prediction function
+def pred_model(model, data_loader, device, best_threshold):
+
+    # Turn on evaluation mode which disables dropout.
+    model = model.eval()
+
+    pred_prob_list = []
+    target_list = []
+    attn_wts_list = []
+    input_ids_list = []
+
+    # make predictions on test set
+    # torch.no_grad() for speed and also since backprop is not needed
+    with torch.no_grad():
+        
+        for d in data_loader:
+            input_ids = d['input_ids'].type(torch.LongTensor).to(device)
+            attention_mask = d['attention_mask'].to(device)
+            n_chunks = d['n_chunks'].to(device)
+            target = d['target'].to(device)
+
+            # pass through model
+            outputs = model(
+                input_ids = input_ids, 
+                attention_mask = attention_mask, 
+                n_chunks = n_chunks
+            )
+
+            # make predictions
+            pred_prob = F.softmax(outputs, 1)[:, 1]
+
+            # detach tensors for metrics
+            target_np = target.detach().numpy()
+            pred_prob_np = pred_prob.detach().numpy()
+
+            # collect targets and predicted prob for epoch level metrics
+            target_list.append(target_np)
+            pred_prob_list.append(pred_prob_np)
+            attn_wts_list.append(model.attention.att_weights)
+            input_ids_list.append(input_ids)
+
+    # concat output outside the loop
+    target_array = torch.cat(target_list).numpy()
+    pred_prob_array = torch.cat(pred_prob_list).numpy()
+    attn_wts_array = torch.cat(attn_wts_list).numpy()
+    input_ids_array = torch.cat(input_ids_list).numpy()
+    pred_array = (pd.Series(pred_prob_array) > best_threshold).astype(int).values
+
+    output = {
+        'target': target_array,
+        'pred_proba': pred_prob_array,
+        'pred': pred_array,
+        'attn_wts': attn_wts_array,
+        'input_ids': input_ids_array
+    }
+
+    return output

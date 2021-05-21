@@ -89,10 +89,10 @@ class HIBERT(nn.Module):
             )
 
         # group chunks together
-        output = output.split_with_sizes(n_chunks)
+        output = output.split_with_sizes(n_chunks.tolist())
 
         # loop through attention layer (need a loop as there are different sized chunks)
-        output = torch.stack([
+        output = torch.cat([
             self.attention(chunk.view(1, -1, self.bert.config.hidden_size)) 
             for chunk in output
             ])
