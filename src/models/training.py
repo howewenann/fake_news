@@ -176,7 +176,7 @@ def train_model(epochs, model, train_data_loader, val_data_loader, loss_fn, opti
         )
 
         print(
-            f'Epoch val  loss: {round(val_loss, 4):.4f}     ' + 
+            f'Epoch val   loss: {round(val_loss, 4):.4f}     ' + 
             f'ACC: {round(val_acc, 4):.4f}     ' + 
             f'F1: {round(val_f1, 4):.4f}     ' + 
             f'AUC: {round(val_auc, 4):.4f}     '
@@ -209,6 +209,7 @@ def train_model(epochs, model, train_data_loader, val_data_loader, loss_fn, opti
             # update f1
             best_f1 = val_f1
 
+    return history
 
 
 # Prediction function
@@ -221,6 +222,7 @@ def pred_model(model, data_loader, device, best_threshold):
     target_list = []
     attn_wts_list = []
     input_ids_list = []
+    n_chunks_list = []
 
     # make predictions on test set
     # torch.no_grad() for speed and also since backprop is not needed
@@ -245,22 +247,32 @@ def pred_model(model, data_loader, device, best_threshold):
             # collect targets and predicted prob for epoch level metrics
             target_list.append(target)
             pred_prob_list.append(pred_prob)
-            attn_wts_list.append(model.attention.att_weights)
+            attn_wts_list.extend(model.attn_weights)
             input_ids_list.append(input_ids)
+            n_chunks_list.extend(n_chunks.tolist())
 
     # concat output outside the loop
-    target_array = torch.cat(target_list).numpy()
-    pred_prob_array = torch.cat(pred_prob_list).numpy()
-    attn_wts_array = torch.cat(attn_wts_list).numpy()
-    input_ids_array = torch.cat(input_ids_list).numpy()
-    pred_array = (pd.Series(pred_prob_array) > best_threshold).astype(int).values
+    target_array = torch.cat(target_list).tolist()
+    pred_prob_array = torch.cat(pred_prob_list).tolist()
+    pred_array = (pd.Series(pred_prob_array) > best_threshold).astype(int).tolist()
+
+    # compile attention weights
+    attn_wts_compiled = [i.numpy() for i in attn_wts_list]
+
+    # compile input_ids
+    input_ids_array = torch.cat(input_ids_list)
+    input_ids_chunks = input_ids_array.split_with_sizes(n_chunks_list)
+
+    input_ids_compiled = []
+    for chunk in input_ids_chunks:
+        input_ids_compiled.append(chunk.view(1, -1).numpy())
 
     output = {
         'target': target_array,
         'pred_proba': pred_prob_array,
         'pred': pred_array,
-        'attn_wts': attn_wts_array,
-        'input_ids': input_ids_array
+        'attn_wts': attn_wts_compiled,
+        'input_ids': input_ids_compiled,
     }
 
     return output

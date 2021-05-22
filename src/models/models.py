@@ -37,6 +37,7 @@ class HIBERT(nn.Module):
         self.add_linear = add_linear
         self.attn_bias = attn_bias
         self.freeze_layer_count = freeze_layer_count
+        self.attn_weights = None
 
         # Define model objects
         self.bert = BertModel.from_pretrained(PRE_TRAINED_MODEL_NAME, return_dict=False, add_pooling_layer=False)
@@ -89,13 +90,18 @@ class HIBERT(nn.Module):
             )
 
         # group chunks together
-        output = output.split_with_sizes(n_chunks.tolist())
+        chunks = output.split_with_sizes(n_chunks.tolist())
 
         # loop through attention layer (need a loop as there are different sized chunks)
-        output = torch.cat([
-            self.attention(chunk.view(1, -1, self.bert.config.hidden_size)) 
-            for chunk in output
-            ])
+        # collect attention output and attention weights for each call of attention
+        after_attn_list = []
+        self.attn_weights = []
+
+        for chunk in chunks:
+            after_attn_list.append(self.attention(chunk.view(1, -1, self.bert.config.hidden_size)))
+            self.attn_weights.append(self.attention.attn_weights)
+
+        output = torch.cat(after_attn_list)
 
         # fully connected layers
         for fc in self.fc:
