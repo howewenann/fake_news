@@ -1,7 +1,7 @@
-fake_news
+long_texts
 ==============================
 
-analysis on fake news dataset with long text sequences
+analysis on a dataset with long text sequences
 
 Project Organization
 ------------
