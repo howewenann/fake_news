@@ -5,6 +5,7 @@ from src.models.attention import Attention
 
 # Transformers
 from transformers import BertTokenizerFast, BertModel, AdamW, get_linear_schedule_with_warmup
+from transformers import BertPreTrainedModel
 
 class LinearBlock(nn.Module):
 
@@ -22,16 +23,16 @@ class LinearBlock(nn.Module):
         return out
 
 
-class HIBERT(nn.Module):
+class HIBERT(BertPreTrainedModel):
 
     def __init__(self, 
-                    PRE_TRAINED_MODEL_NAME, 
+                    config, 
                     n_classes, 
                     add_linear=None, 
                     attn_bias=False, 
                     freeze_layer_count=-1):
 
-        super(HIBERT, self).__init__()
+        super(HIBERT, self).__init__(config)
 
         self.n_classes = n_classes
         self.add_linear = add_linear
@@ -40,7 +41,7 @@ class HIBERT(nn.Module):
         self.attn_weights = None
 
         # Define model objects
-        self.bert = BertModel.from_pretrained(PRE_TRAINED_MODEL_NAME, return_dict=False, add_pooling_layer=False)
+        self.bert = BertModel(config, add_pooling_layer=False)
         self.fc_in_size = self.bert.config.hidden_size
 
         # Control layer freezing
@@ -86,7 +87,8 @@ class HIBERT(nn.Module):
         # Bert transformer (take sequential output)
         output, _ = self.bert(
             input_ids = input_ids, 
-            attention_mask = attention_mask
+            attention_mask = attention_mask, 
+            return_dict=False
             )
 
         # group chunks together
