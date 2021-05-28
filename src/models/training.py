@@ -29,7 +29,7 @@ class Trainer():
         self.device = device
 
         # load model and tokenizer
-        self.model = HIBERT.from_pretrained(self.model_dir, self.model_config)
+        self.model = HIBERT.from_pretrained(self.model_dir, **self.model_config)
         self.tokenizer = BertTokenizerFast.from_pretrained(self.model_dir)
 
         # loss function, optimizer and scheduler
