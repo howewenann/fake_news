@@ -257,7 +257,7 @@ def pred_model(model, data_loader, device, best_threshold):
     pred_array = (pd.Series(pred_prob_array) > best_threshold).astype(int).tolist()
 
     # compile attention weights
-    attn_wts_compiled = [i.numpy() for i in attn_wts_list]
+    attn_wts_compiled = [i.numpy().flatten() for i in attn_wts_list]
 
     # compile input_ids
     input_ids_array = torch.cat(input_ids_list)
@@ -265,7 +265,7 @@ def pred_model(model, data_loader, device, best_threshold):
 
     input_ids_compiled = []
     for chunk in input_ids_chunks:
-        input_ids_compiled.append(chunk.view(1, -1).numpy())
+        input_ids_compiled.append(chunk.view(1, -1).numpy().flatten())
 
     output = {
         'target': target_array,
