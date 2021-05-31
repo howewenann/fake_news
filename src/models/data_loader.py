@@ -1,5 +1,6 @@
 from torch.utils.data import Dataset, DataLoader
 import torch
+import numpy as np
 
 # Create a pytorch dataset object
 class CreateDataset(Dataset):
@@ -11,12 +12,13 @@ class CreateDataset(Dataset):
         The __getitem__ function loads and returns a sample from the dataset at the given index idx. Returns a python dict
     '''
 
-    def __init__(self, text, targets, tokenizer, max_len, chunksize):
+    def __init__(self, text, targets, tokenizer, max_len, chunksize, is_unseen):
         self.text = text
         self.targets = targets
         self.tokenizer = tokenizer
         self.max_len = max_len
         self.chunksize = chunksize
+        self.is_unseen = is_unseen
 
     def __len__(self):
         return len(self.text)
@@ -65,12 +67,18 @@ class CreateDataset(Dataset):
         input_ids = torch.stack(input_id_chunks)
         attention_mask = torch.stack(mask_chunks)
 
+        # in case targets dont exist when predicting on unseen data
+        if self.is_unseen:
+            target_ = torch.tensor([target])
+        else:
+            target_ = torch.tensor([target], dtype=torch.long)
+
         out_dict = {
             'text': text,
             'input_ids': input_ids,
             'attention_mask': attention_mask,
             'n_chunks': torch.tensor([len(input_id_chunks)], dtype=torch.long),
-            'target': torch.tensor([target], dtype=torch.long)
+            'target': target_
         }
 
         return out_dict
@@ -95,7 +103,7 @@ def custom_collate_fn(batch):
 
 
 # Create dataloader
-def create_data_loader(df, tokenizer, max_len, batch_size, chunksize = 512, sampler = None, shuffle = False, drop_last = False):
+def create_data_loader(df, tokenizer, max_len, batch_size, chunksize = 512, is_unseen=False, sampler = None, shuffle = False, drop_last = False):
 
     # create dataset object
     ds = CreateDataset(
@@ -103,7 +111,8 @@ def create_data_loader(df, tokenizer, max_len, batch_size, chunksize = 512, samp
         targets = df['target'].to_numpy(), 
         tokenizer = tokenizer, 
         max_len = max_len,
-        chunksize = chunksize
+        chunksize = chunksize,
+        is_unseen = is_unseen
         )
 
     return DataLoader(
