@@ -405,7 +405,7 @@ class Trainer():
             df = df_test, 
             tokenizer = self.tokenizer, 
             max_len = self.max_len, 
-            batch_size = self.batch_size, 
+            batch_size = self.test_batch_size, 
             chunksize = 512, 
             sampler = None, 
             shuffle = False, 
