@@ -57,8 +57,14 @@ class Trainer():
 
         # other attributes
         self.history = None
-        self.best_threshold = None
         self.best_f1 = None
+
+        # check if there is already a best threshold in the model folder
+        try:
+            self.best_threshold = pickle.load(open(Path(self.model_dir, 'best_threshold.pkl'), "rb"))
+        except (OSError, IOError) as e:
+            self.best_threshold = None
+            
 
     # loss function
     def get_loss_function(self, loss_fn, device):
