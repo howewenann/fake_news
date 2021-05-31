@@ -418,7 +418,7 @@ class Trainer():
             best_threshold = self.best_threshold
 
         # make predictions
-        return pred_model(
+        return self.pred_model(
             model=self.model, 
             data_loader=test_data_loader, 
             device=self.device, 
