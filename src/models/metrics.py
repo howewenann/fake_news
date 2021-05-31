@@ -25,5 +25,12 @@ def calculate_metrics(y_true, probas_pred, best_threshold=None):
     best_f1 = f1_score(y_true=y_true, y_pred=y_pred)
     acc_score = accuracy_score(y_true=y_true, y_pred=y_pred)
 
-    return acc_score, best_f1, auc_score, best_threshold
+    out = {
+        'acc_score': acc_score,
+        'best_f1': best_f1,
+        'auc_score': auc_score, 
+        'best_threshold':best_threshold
+        }
+
+    return out
 
