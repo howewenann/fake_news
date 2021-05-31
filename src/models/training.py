@@ -9,7 +9,7 @@ from collections import defaultdict
 import pickle
 
 from sklearn.metrics import confusion_matrix, precision_recall_curve, auc
-from src.models.metrics import calculate_metrics
+import src.models.metrics as metrics
 from src.models.data_loader import create_data_loader
 from src.models.models import HIBERT
 
@@ -27,6 +27,9 @@ class Trainer():
         self.model_config = model_config
         self.epochs = epochs
         self.device = device
+
+        if self.out_dir is None:
+            self.out_dir = ''
 
         # load model and tokenizer
         self.model = HIBERT.from_pretrained(self.model_dir, **self.model_config)
@@ -86,6 +89,18 @@ class Trainer():
         return out
 
 
+    # function for printing metrics
+    def print_metrics(self, loss, loss_prefix, metrics_dict):
+
+        out_str = loss_prefix + ': ' + '{:.4f}'.format(round(loss, 4))
+        
+        # loop through dict to add metrics to string
+        for key in metrics_dict.keys():
+            out_str = out_str + '     ' + key + ': ' + '{:.4f}'.format(round(metrics_dict[key], 4))
+        
+        print(out_str)
+
+
     # training for one epoch
     def train_epoch(self, model, data_loader, loss_fn, optimizer, device, scheduler):
 
@@ -136,27 +151,29 @@ class Trainer():
             pred_prob_list.append(pred_prob_np)
 
             # batch level metrics
-            acc_score, best_f1, auc_score, _ = calculate_metrics(y_true=target_np, probas_pred=pred_prob_np)
+            best_threshold_batch = metrics.calculate_best_threshold(y_true=target_np, probas_pred=pred_prob_np)
+            metrics_batch = metrics.calculate_metrics(y_true=target_np, probas_pred=pred_prob_np, best_threshold=best_threshold_batch)
 
             # print batch level metrics
-            print(
-                f'Batch Train loss: {round(loss.item(), 4):.4f}     ' + 
-                f'Class 1 prop: {round(np.mean(target_np), 4):.4f}     ' + 
-                f'ACC: {round(acc_score, 4):.4f}     ' + 
-                f'F1: {round(best_f1, 4):.4f}     ' + 
-                f'AUC: {round(auc_score, 4):.4f}     '
-            )
+            self.print_metrics(loss=loss.item(), loss_prefix='Batch Train loss', metrics_dict=metrics_batch)
 
         # Epoch level metrics (also return best threshold)
-        acc_score_epoch, best_f1_epoch, auc_score_epoch, best_threshold_epoch = \
-            calculate_metrics(
+        best_threshold_epoch = \
+            metrics.calculate_best_threshold(
                 y_true=np.concatenate(target_list), 
                 probas_pred=np.concatenate(pred_prob_list)
+                )
+
+        metrics_epoch = \
+            metrics.calculate_metrics(
+                y_true=np.concatenate(target_list), 
+                probas_pred=np.concatenate(pred_prob_list),
+                best_threshold=best_threshold_epoch
             )
 
         loss_epoch = np.mean(losses)
 
-        return loss_epoch, acc_score_epoch, best_f1_epoch, auc_score_epoch, best_threshold_epoch
+        return loss_epoch, best_threshold_epoch, metrics_epoch
 
 
     # evaluate model on validation set (based on best threshold)
@@ -202,16 +219,16 @@ class Trainer():
                 pred_prob_list.append(pred_prob_np)
 
         # Epoch level metrics (use threshold from training to make predictions)
-        acc_score_epoch, best_f1_epoch, auc_score_epoch, _ = \
-            calculate_metrics(
+        metrics_epoch = \
+            metrics.calculate_metrics(
                 y_true=np.concatenate(target_list), 
-                probas_pred=np.concatenate(pred_prob_list), 
+                probas_pred=np.concatenate(pred_prob_list),
                 best_threshold=best_threshold
-                )
+            )
 
         loss_epoch = np.mean(losses)
 
-        return loss_epoch, acc_score_epoch, best_f1_epoch, auc_score_epoch
+        return loss_epoch, metrics_epoch
 
 
     # main training loop
@@ -226,7 +243,7 @@ class Trainer():
             print(f'Epoch {epoch + 1} / {epochs}')
             print('-'*20)
 
-            train_loss, train_acc, train_f1, train_auc, best_threshold = self.train_epoch(
+            train_loss, best_threshold, train_metrics = self.train_epoch(
                 model = model, 
                 data_loader = train_data_loader, 
                 loss_fn = loss_fn, 
@@ -236,14 +253,9 @@ class Trainer():
             )
 
             print()
-            print(
-                f'Epoch Train loss: {round(train_loss, 4):.4f}     ' + 
-                f'ACC: {round(train_acc, 4):.4f}     ' + 
-                f'F1: {round(train_f1, 4):.4f}     ' + 
-                f'AUC: {round(train_auc, 4):.4f}     '
-            )
+            self.print_metrics(loss=train_loss, loss_prefix='Epoch Train loss', metrics_dict=train_metrics)
 
-            val_loss, val_acc, val_f1, val_auc = self.eval_model(
+            val_loss, val_metrics = self.eval_model(
                 model = model, 
                 data_loader = val_data_loader, 
                 loss_fn = loss_fn, 
@@ -251,41 +263,35 @@ class Trainer():
                 best_threshold = best_threshold
             )
 
-            print(
-                f'Epoch val   loss: {round(val_loss, 4):.4f}     ' + 
-                f'ACC: {round(val_acc, 4):.4f}     ' + 
-                f'F1: {round(val_f1, 4):.4f}     ' + 
-                f'AUC: {round(val_auc, 4):.4f}     '
-            )
-
+            self.print_metrics(loss=val_loss, loss_prefix='Epoch val   loss', metrics_dict=val_metrics)
             print()
 
             # save history
             self.history['train_loss'].append(train_loss)
-            self.history['train_acc'].append(train_acc)
-            self.history['train_f1'].append(train_f1)
-            self.history['train_auc'].append(train_auc)
+            self.history['train_acc'].append(train_metrics['ACC'])
+            self.history['train_f1'].append(train_metrics['F1'])
+            self.history['train_auc'].append(train_metrics['AUC'])
 
             self.history['val_loss'].append(val_loss)
-            self.history['val_acc'].append(val_acc)
-            self.history['val_f1'].append(val_f1)
-            self.history['val_auc'].append(val_auc)
+            self.history['val_acc'].append(val_metrics['ACC'])
+            self.history['val_f1'].append(val_metrics['F1'])
+            self.history['val_auc'].append(val_metrics['AUC'])
 
             self.history['best_threshold'].append(best_threshold)
 
             # save best model
-            if val_f1 > best_f1:
+            if val_metrics['F1'] > best_f1:
 
                 # save model
                 model.save_pretrained(Path(self.out_dir, 'trained_model'))
-                self.tokenizer.save_pretrained(Path(self.out_dir, 'tokenizer'))
+                self.tokenizer.save_pretrained(Path(self.out_dir, 'trained_model'))
                 
                 # save threshold
-                pickle.dump(best_threshold, open(Path(self.out_dir, 'best_threshold.pkl'), 'wb'))
+                pickle.dump(best_threshold, open(Path(self.out_dir, 'trained_model', 'best_threshold.pkl'), 'wb'))
                 self.best_threshold = best_threshold
                 
                 # update f1
-                best_f1 = val_f1
+                best_f1 = val_metrics['F1']
                 self.best_f1 = best_f1
 
 
@@ -399,6 +405,17 @@ class Trainer():
 
     # call this function for prediction
     def predict(self, df_test):
+
+        df_test = df_test.copy()
+        
+        # initialize this variable
+        is_unseen = False
+
+        # df_test may not have a 'target' column
+        # manually create one here
+        if 'target' not in df_test.columns:
+            df_test['target'] = [np.nan] * df_test.shape[0]
+            is_unseen = True
         
         # create test data loader
         test_data_loader = create_data_loader(
@@ -407,6 +424,7 @@ class Trainer():
             max_len = self.max_len, 
             batch_size = self.test_batch_size, 
             chunksize = 512, 
+            is_unseen = is_unseen,
             sampler = None, 
             shuffle = False, 
             drop_last = False)
