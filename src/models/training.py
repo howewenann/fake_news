@@ -407,7 +407,7 @@ class Trainer():
 
 
     # call this function for prediction
-    def predict(self, df_test):
+    def predict(self, df_test, threshold=0.5):
 
         df_test = df_test.copy()
         
@@ -431,17 +431,11 @@ class Trainer():
             sampler = None, 
             shuffle = False, 
             drop_last = False)
-        
-        # get best threshold
-        if self.best_threshold is None:
-            best_threshold = 0.5
-        else:
-            best_threshold = self.best_threshold
 
         # make predictions
         return self.pred_model(
             model=self.model, 
             data_loader=test_data_loader, 
             device=self.device, 
-            best_threshold=best_threshold
+            best_threshold=threshold
             )
