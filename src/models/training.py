@@ -273,16 +273,13 @@ class Trainer():
             print()
 
             # save history
-            self.history['train_loss'].append(train_loss)
-            self.history['train_acc'].append(train_metrics['ACC'])
-            self.history['train_f1'].append(train_metrics['F1'])
-            self.history['train_auc'].append(train_metrics['AUC'])
+            train_metrics['loss'] = train_loss
+            val_metrics['loss'] = val_loss
 
-            self.history['val_loss'].append(val_loss)
-            self.history['val_acc'].append(val_metrics['ACC'])
-            self.history['val_f1'].append(val_metrics['F1'])
-            self.history['val_auc'].append(val_metrics['AUC'])
-
+            for key in train_metrics.keys():
+                self.history['train_' + key.lower()].append(train_metrics[key])
+                self.history['val_' + key.lower()].append(val_metrics[key])
+            
             self.history['best_threshold'].append(best_threshold)
 
             # save best model
