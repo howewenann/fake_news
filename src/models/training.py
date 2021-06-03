@@ -20,7 +20,7 @@ class Trainer():
     def __init__(self, model_dir, model_config,
                 max_len=512*4, epochs=4, out_dir=None, device='cpu',
                 loss_fn='cross_entropy_loss', optimizer='adamw', lr=1e-5, scheduler='linear_schedule_with_warmup',
-                train_batch_size=32, val_batch_size=32, test_batch_size=32, chunksize=512, sampler = None):
+                train_batch_size=32, val_batch_size=32, chunksize=512, sampler = None):
         
         self.out_dir = out_dir
         self.model_dir = model_dir
@@ -45,7 +45,6 @@ class Trainer():
         self.max_len = max_len
         self.train_batch_size = train_batch_size
         self.val_batch_size = val_batch_size
-        self.test_batch_size = test_batch_size
         self.chunksize = chunksize
         self.sampler = sampler
         self.shuffle = None
@@ -58,12 +57,25 @@ class Trainer():
         # other attributes
         self.history = None
         self.best_f1 = None
+        self.best_threshold = None
 
-        # check if there is already a best threshold in the model folder
-        try:
-            self.best_threshold = pickle.load(open(Path(self.model_dir, 'best_threshold.pkl'), "rb"))
-        except (OSError, IOError) as e:
-            self.best_threshold = None
+        # compile constructor args as a dict (to save)
+        self.params = {
+            'model_dir': self.model_dir, 
+            'model_config': self.model_config,
+            'max_len': self.max_len, 
+            'epochs': self.epochs, 
+            'out_dir': self.out_dir, 
+            'device': self.device,
+            'loss_fn': self.loss_fn, 
+            'optimizer': self.optimizer, 
+            'lr': self.lr, 
+            'scheduler': self.scheduler, 
+            'train_batch_size': self.train_batch_size, 
+            'val_batch_size': self.val_batch_size, 
+            'chunksize': self.chunksize, 
+            'sampler': self.sampler
+        }
             
 
     # loss function
@@ -297,6 +309,81 @@ class Trainer():
                 best_f1 = val_metrics['F1']
                 self.best_f1 = best_f1
 
+        # when training is complete, dump parameters used in Trainer class
+        pickle.dump(self.params, open(Path(self.out_dir, 'trained_model', 'trainer_params.pkl'), 'wb'))
+
+
+    # call this function for training
+    def fit(self, df_train, df_val):
+
+        # create data loaders
+        train_data_loader = create_data_loader(
+            df = df_train, 
+            tokenizer = self.tokenizer, 
+            max_len = self.max_len, 
+            batch_size = self.train_batch_size, 
+            chunksize = self.chunksize, 
+            sampler = self.sampler, 
+            shuffle = self.shuffle, 
+            drop_last = True)
+
+        val_data_loader = create_data_loader(
+            df = df_val, 
+            tokenizer = self.tokenizer, 
+            max_len = self.max_len, 
+            batch_size = self.val_batch_size, 
+            chunksize = self.chunksize, 
+            sampler = None, 
+            shuffle = False, 
+            drop_last = False)
+
+        # get loss function, optimizer and scheduler
+        loss_fn = self.get_loss_function(loss_fn=self.loss_fn, device=self.device)
+        optimizer = self.get_optimizer(model=self.model, optimizer=self.optimizer, lr=self.lr)
+        scheduler = self.get_scheduler(scheduler=self.scheduler, optimizer=optimizer, 
+                                        total_steps=(len(train_data_loader) * self.epochs))
+
+        # call main training loop
+        self.train_model(
+            epochs=self.epochs, 
+            model=self.model, 
+            train_data_loader=train_data_loader, 
+            val_data_loader=val_data_loader, 
+            loss_fn=loss_fn, 
+            optimizer=optimizer, 
+            device=self.device, 
+            scheduler=scheduler)
+
+
+class Predictor():
+
+    def __init__(self, model_dir, test_batch_size=32, device='cpu'):
+                
+        self.model_dir = model_dir
+        self.test_batch_size = test_batch_size
+        self.device = device
+
+        # load params from Trainer() used to train model
+        self.params = pickle.load(open(Path(self.model_dir, 'trainer_params.pkl'), "rb"))
+
+        # get required params from trainer
+        self.model_config = self.params['model_config']
+        self.max_len = self.params['max_len']
+        self.chunksize = self.params['chunksize']
+
+        # check if there is already a best threshold in the model folder
+        try:
+            self.best_threshold = pickle.load(open(Path(self.model_dir, 'best_threshold.pkl'), "rb"))
+        except (OSError, IOError) as e:
+            self.best_threshold = None
+
+        # load model and tokenizer
+        self.model = HIBERT.from_pretrained(self.model_dir, **self.model_config)
+        self.tokenizer = BertTokenizerFast.from_pretrained(self.model_dir)
+
+        # other attributes
+        self.is_unseen = None
+
 
     # Prediction function
     def pred_model(self, model, data_loader, device, best_threshold):
@@ -364,61 +451,19 @@ class Trainer():
         return output
 
 
-    # call this function for training
-    def fit(self, df_train, df_val):
-
-        # create data loaders
-        train_data_loader = create_data_loader(
-            df = df_train, 
-            tokenizer = self.tokenizer, 
-            max_len = self.max_len, 
-            batch_size = self.train_batch_size, 
-            chunksize = self.chunksize, 
-            sampler = self.sampler, 
-            shuffle = self.shuffle, 
-            drop_last = True)
-
-        val_data_loader = create_data_loader(
-            df = df_val, 
-            tokenizer = self.tokenizer, 
-            max_len = self.max_len, 
-            batch_size = self.val_batch_size, 
-            chunksize = self.chunksize, 
-            sampler = None, 
-            shuffle = False, 
-            drop_last = False)
-
-        # get loss function, optimizer and scheduler
-        loss_fn = self.get_loss_function(loss_fn=self.loss_fn, device=self.device)
-        optimizer = self.get_optimizer(model=self.model, optimizer=self.optimizer, lr=self.lr)
-        scheduler = self.get_scheduler(scheduler=self.scheduler, optimizer=optimizer, 
-                                        total_steps=(len(train_data_loader) * self.epochs))
-
-        # call main training loop
-        self.train_model(
-            epochs=self.epochs, 
-            model=self.model, 
-            train_data_loader=train_data_loader, 
-            val_data_loader=val_data_loader, 
-            loss_fn=loss_fn, 
-            optimizer=optimizer, 
-            device=self.device, 
-            scheduler=scheduler)
-
-
-    # call this function for prediction
+        # call this function for prediction
     def predict(self, df_test, threshold=0.5):
 
         df_test = df_test.copy()
         
         # initialize this variable
-        is_unseen = False
+        self.is_unseen = False
 
         # df_test may not have a 'target' column
         # manually create one here
         if 'target' not in df_test.columns:
             df_test['target'] = [np.nan] * df_test.shape[0]
-            is_unseen = True
+            self.is_unseen = True
         
         # create test data loader
         test_data_loader = create_data_loader(
@@ -426,8 +471,8 @@ class Trainer():
             tokenizer = self.tokenizer, 
             max_len = self.max_len, 
             batch_size = self.test_batch_size, 
-            chunksize = 512, 
-            is_unseen = is_unseen,
+            chunksize = self.chunksize, 
+            is_unseen = self.is_unseen,
             sampler = None, 
             shuffle = False, 
             drop_last = False)
