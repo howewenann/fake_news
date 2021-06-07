@@ -1,96 +1,50 @@
-import pandas as pd
-import numpy as np
-import matplotlib.cm as cm
-import matplotlib
-from matplotlib.colors import LinearSegmentedColormap
+# Contains preprocessor class
+# useful if there is some parameters learned during training
 
-from sklearn.preprocessing import StandardScaler
+from transformers import BertTokenizerFast
 
-from multiprocessing import Pool
+from tqdm import tqdm
+tqdm.pandas()
 
-# combine word tokens
-def combine_word_tokens(tokens_list, attn_list, agg_fn):
+from sklearn.model_selection import train_test_split
 
-    df_html = pd.DataFrame({'tokens':tokens_list, 'attention':attn_list})
+class Preprocessor():
 
-    # filter to remove special tokens
-    special_tokens = ['[CLS]', '[PAD]', '[SEP]']
-    df_html = df_html.loc[~df_html['tokens'].isin(special_tokens), :].reset_index(drop=True)
-    df_html['word_grp'] = 0
+    def __init__(self, model_dir, random_state=None):
+        self.model_dir = model_dir
+        self.random_state = random_state
+        self.tokenizer = BertTokenizerFast.from_pretrained(self.model_dir)
 
-    group = 0
-    for i in range(len(df_html['tokens'])):
-        word = df_html['tokens'].tolist()[i]
+    def preprocess_data(self, df, min_tokens=None, max_tokens=None, subsample=None):
         
-        # if word is not a word piece, count as word
-        if '##' not in word:
-            group = group + 1
-        
-        df_html.loc[i, 'word_grp'] = group
+        df = df.copy()
 
-    combined_tokens = df_html.groupby('word_grp')['tokens'].apply(lambda x: ' '.join(x))
-    combined_attn = df_html.groupby('word_grp')['attention'].agg(agg_fn)
+        # rename columns
+        df = df.rename(columns = {'review': 'content'})
 
-    # rescale attention
-    combined_attn = combined_attn / combined_attn.sum()
+        # create target variable
+        df['target'] = (df['sentiment'] == 'positive').astype(int)
 
-    # clean up tokens
-    combined_tokens = combined_tokens.str.replace(' ##', '')
+        # count number of tokens        
+        df['tokens'] = df['content'].progress_apply(self.tokenizer.tokenize)
+        df['n_tokens'] = df['tokens'].apply(len)
 
-    # output lists
-    combined_tokens = combined_tokens.tolist()
-    combined_attn = combined_attn.tolist()
+        if min_tokens is not None:
+            df = df.loc[df['n_tokens'] >= min_tokens, :]
 
-    return combined_tokens, combined_attn
+        if max_tokens is not None:
+            df = df.loc[df['n_tokens'] <= max_tokens, :]
 
+        # drop columns which are note needed
+        df = df.drop(['tokens', 'n_tokens'], axis=1)
 
-# Create html visualization of attention weights
-def create_html(tokens_list, attn_list, clip_neg=True):
+        # subsample if needed
+        if subsample is not None:
+            df, _ = train_test_split(
+                df, 
+                train_size=subsample, 
+                random_state=self.random_state, 
+                shuffle=True, 
+                stratify=df['target'])
 
-    # create custom colour map
-    cmap = LinearSegmentedColormap.from_list('rg', ['r', 'w', 'g'], N=256)
-
-    df_html = pd.DataFrame({'tokens':tokens_list, 'attention':attn_list})
-
-    # filter to remove special tokens
-    special_tokens = ['[CLS]', '[PAD]', '[SEP]']
-    df_html = df_html.loc[~df_html['tokens'].isin(special_tokens), :].reset_index(drop=True)
-
-    # Rescale attention weights
-    df_html['attention'] = df_html['attention'] / df_html['attention'].sum()
-
-    # create colour map
-    norm = matplotlib.colors.TwoSlopeNorm(vmin=-3, vcenter=0, vmax=3)
-    m = cm.ScalarMappable(norm=norm, cmap=cmap)
-
-    # standardize attention weights
-    norm_attn = pd.Series(
-        StandardScaler().fit_transform(df_html['attention'].values.reshape(-1,1)).flatten()
-    )
-
-    # clip outliers
-    norm_attn[norm_attn > 3] = 3
-    norm_attn[norm_attn < -3] = -3
-
-    # clip norm weights <= 0
-    if clip_neg:
-        norm_attn[norm_attn <= 0] = 0
-
-    # get colours
-    df_html['colour'] = norm_attn.apply(lambda x: matplotlib.colors.to_hex(m.to_rgba(x)))
-
-    html_text = '<span style="background-color:' + df_html['colour'] + ';">' \
-                + df_html['tokens'] + '</span>'
-
-    html_text = ' '.join(html_text)
-
-    return html_text
-
-
-def parallelize_dataframe(df, func, ncores=4):
-    df_split = np.array_split(df, ncores)
-    pool = Pool(ncores)
-    out = pd.concat(pool.map(func, df_split), ignore_index=True, sort=True)
-    pool.close()
-    pool.join()
-    return out
+        return df

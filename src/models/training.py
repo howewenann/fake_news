@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 from collections import defaultdict
 import pickle
+import json
 
 from sklearn.metrics import confusion_matrix, precision_recall_curve, auc
 import src.models.metrics as metrics
@@ -20,7 +21,7 @@ class Trainer():
     def __init__(self, model_dir, model_config,
                 max_len=512*4, epochs=4, out_dir=None, device='cpu',
                 loss_fn='cross_entropy_loss', optimizer='adamw', lr=1e-5, scheduler='linear_schedule_with_warmup',
-                train_batch_size=32, val_batch_size=32, chunksize=512, sampler = None):
+                train_batch_size=32, val_batch_size=32, chunksize=512, sampler = None, print_n = 1):
         
         self.out_dir = out_dir
         self.model_dir = model_dir
@@ -48,6 +49,7 @@ class Trainer():
         self.chunksize = chunksize
         self.sampler = sampler
         self.shuffle = None
+        self.print_n = print_n
 
         if self.sampler is None:
             self.shuffle = True
@@ -59,24 +61,6 @@ class Trainer():
         self.best_f1 = None
         self.best_threshold = None
 
-        # compile constructor args as a dict (to save)
-        self.params = {
-            'model_dir': self.model_dir, 
-            'model_config': self.model_config,
-            'max_len': self.max_len, 
-            'epochs': self.epochs, 
-            'out_dir': self.out_dir, 
-            'device': self.device,
-            'loss_fn': self.loss_fn, 
-            'optimizer': self.optimizer, 
-            'lr': self.lr, 
-            'scheduler': self.scheduler, 
-            'train_batch_size': self.train_batch_size, 
-            'val_batch_size': self.val_batch_size, 
-            'chunksize': self.chunksize, 
-            'sampler': self.sampler
-        }
-            
 
     # loss function
     def get_loss_function(self, loss_fn, device):
@@ -108,9 +92,16 @@ class Trainer():
 
 
     # function for printing metrics
-    def print_metrics(self, loss, loss_prefix, metrics_dict):
+    def print_metrics(self, loss, loss_prefix, metrics_dict, batch_no=None):
 
-        out_str = loss_prefix + ': ' + '{:.4f}'.format(round(loss, 4))
+        # print batch number if required
+        if batch_no is None:
+            out_str = ''
+        else:
+            out_str = 'Batch: ' + str(batch_no) + '     '
+
+        # append loss    
+        out_str = out_str + loss_prefix + ': ' + '{:.4f}'.format(round(loss, 4))
         
         # loop through dict to add metrics to string
         for key in metrics_dict.keys():
@@ -128,6 +119,7 @@ class Trainer():
         losses = []
         pred_prob_list = []
         target_list = []
+        batch = 0
 
         # training loop for one epoch
         for d in data_loader:
@@ -173,7 +165,11 @@ class Trainer():
             metrics_batch = metrics.calculate_metrics(y_true=target_np, probas_pred=pred_prob_np, best_threshold=best_threshold_batch)
 
             # print batch level metrics
-            self.print_metrics(loss=loss.item(), loss_prefix='Batch Train loss', metrics_dict=metrics_batch)
+            if batch % self.print_n == 0:
+                self.print_metrics(loss=loss.item(), loss_prefix='Batch Train loss', metrics_dict=metrics_batch, batch_no=batch)
+
+            # update batch counter
+            batch = batch + 1
 
         # Epoch level metrics (also return best threshold)
         best_threshold_epoch = \
@@ -301,16 +297,14 @@ class Trainer():
                 model.save_pretrained(Path(self.out_dir, 'trained_model'))
                 self.tokenizer.save_pretrained(Path(self.out_dir, 'trained_model'))
                 
-                # save threshold
-                pickle.dump(best_threshold, open(Path(self.out_dir, 'trained_model', 'best_threshold.pkl'), 'wb'))
+                # save threshold (convert to float because json does not allow numpy format)
+                best_threshold_dict = {'best_threshold': float(best_threshold)}
+                json.dump(best_threshold_dict, open(Path(self.out_dir, 'trained_model', 'best_threshold.json'), 'w'), indent=4)
                 self.best_threshold = best_threshold
                 
                 # update f1
                 best_f1 = val_metrics['F1']
                 self.best_f1 = best_f1
-
-        # when training is complete, dump parameters used in Trainer class
-        pickle.dump(self.params, open(Path(self.out_dir, 'trained_model', 'trainer_params.pkl'), 'wb'))
 
 
     # call this function for training
@@ -364,7 +358,7 @@ class Predictor():
         self.device = device
 
         # load params from Trainer() used to train model
-        self.params = pickle.load(open(Path(self.model_dir, 'trainer_params.pkl'), "rb"))
+        self.params = json.load(open(Path(self.model_dir, 'trainer_params.json')))
 
         # get required params from trainer
         self.model_config = self.params['model_config']
@@ -373,7 +367,8 @@ class Predictor():
 
         # check if there is already a best threshold in the model folder
         try:
-            self.best_threshold = pickle.load(open(Path(self.model_dir, 'best_threshold.pkl'), "rb"))
+            best_threshold_dict = json.load(open(Path(self.model_dir, 'best_threshold.json')))
+            self.best_threshold = best_threshold_dict['best_threshold']
         except (OSError, IOError) as e:
             self.best_threshold = None
 

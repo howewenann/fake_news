@@ -1,0 +1,55 @@
+# Directories
+# Assuming cwd is at the root folder
+data_raw_dir: 'data/raw'
+data_processed_dir: 'data/processed'
+
+# filenames
+data_raw_filename: 'IMDB Dataset.csv'
+data_processed_filename: 'data_processed.csv'
+
+# seed
+random_state: 42
+
+# data preprocessing params
+preprocess_config:
+  min_tokens: 700
+  max_tokens:
+  subsample: 
+
+# Training split
+train_size: 0.8
+val_size: 0.1
+test_size: 0.1
+
+# Model / training config
+trainer_config: 
+
+  model_dir: "D:/Users/Nicholas/Projects/BERT_pretrained/biobert-base-cased-v1.1"
+
+  model_config: 
+    n_classes: 2
+    add_linear: 
+      - 512
+      - 256
+    attn_bias: False
+    freeze_layer_count: 8
+
+  max_len: 2048
+  epochs: 4
+  out_dir: 'models'
+  device: 'cpu'
+  loss_fn: 'cross_entropy_loss'
+  optimizer: 'adamw'
+  lr: 1.e-5 
+  scheduler: 'linear_schedule_with_warmup'
+  train_batch_size: 32
+  val_batch_size: 32
+  chunksize: 512
+  sampler:
+  print_n: 10
+
+# test params
+predictor_config:
+  model_dir: 'models'
+  test_batch_size: 32
+  device: 'cpu'

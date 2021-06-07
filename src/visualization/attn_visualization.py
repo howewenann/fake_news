@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import matplotlib.cm as cm
 import matplotlib
 from matplotlib.colors import LinearSegmentedColormap
@@ -57,7 +58,7 @@ def create_html(tokens_list, attn_list, clip_neg=True):
     df_html['attention'] = df_html['attention'] / df_html['attention'].sum()
 
     # create colour map
-    norm = matplotlib.colors.DivergingNorm(vmin=-3, vcenter=0, vmax=3)
+    norm = matplotlib.colors.TwoSlopeNorm(vmin=-3, vcenter=0, vmax=3)
     m = cm.ScalarMappable(norm=norm, cmap=cmap)
 
     # standardize attention weights
@@ -74,7 +75,7 @@ def create_html(tokens_list, attn_list, clip_neg=True):
         norm_attn[norm_attn <= 0] = 0
 
     # get colours
-    df_html['colour'] = norm_attn.apply(lambda x: matplotlib.colors.to_hex(m.torgba(x)))
+    df_html['colour'] = norm_attn.apply(lambda x: matplotlib.colors.to_hex(m.to_rgba(x)))
 
     html_text = '<span style="background-color:' + df_html['colour'] + ';">' \
                 + df_html['tokens'] + '</span>'
