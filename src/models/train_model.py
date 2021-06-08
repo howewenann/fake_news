@@ -7,10 +7,13 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from pprint import pformat
 
+import matplotlib
+import matplotlib.pyplot as plt
+
 import logging
 log_fmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 logging.basicConfig(level=logging.INFO, format=log_fmt)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("train_model")
 
 def project_path(level):
     depth = ['..'] * level
@@ -37,13 +40,13 @@ import src.models.training as training
 def preprocess_data(in_path, out_path):
     
     # load preprocessor class
-    preprocessor = preprocess.Preprocessor(
+    data_cleaner = preprocess.DataCleaner(
         model_dir=config['trainer_config']['model_dir'], 
         random_state=config['random_state'])
 
     data_raw = pd.read_csv(in_path)
 
-    data_processed = preprocessor.preprocess_data(
+    data_processed = data_cleaner.clean_data(
         df = data_raw,
         min_tokens=config['preprocess_config']['min_tokens'], 
         max_tokens=config['preprocess_config']['max_tokens'], 
@@ -110,7 +113,25 @@ def train_model():
     # Begin Training
     logger.info('Train model: ')
     trainer.fit(df_train, df_val)
-    
+
+    # dump training history (convert to float)
+    history = {k: [float(s) for s in v] for k, v in trainer.history.items()}
+    json.dump(history, open(Path(root, config['reports_dir'], 'training_history.json'), 'w'), indent=4)
+
+    # dump training plots
+    for metric in trainer.metrics_names:
+        save_img_name = 'training_' + metric + '.png'
+        epochs = len(history['train_' + metric])
+
+        plt.plot(list(range(epochs)), history['train_' + metric], label = 'train ' + metric)
+        plt.plot(list(range(epochs)), history['val_' + metric], label = 'val ' + metric)
+        plt.legend()
+
+        plt.savefig(Path(root, config['figures_dir'], save_img_name))
+
+        # clear figure after plotting
+        plt.clf()
+
 
 if __name__ == "__main__":
     train_model()

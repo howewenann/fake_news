@@ -8,14 +8,14 @@ tqdm.pandas()
 
 from sklearn.model_selection import train_test_split
 
-class Preprocessor():
+class DataCleaner():
 
     def __init__(self, model_dir, random_state=None):
         self.model_dir = model_dir
         self.random_state = random_state
         self.tokenizer = BertTokenizerFast.from_pretrained(self.model_dir)
 
-    def preprocess_data(self, df, min_tokens=None, max_tokens=None, subsample=None):
+    def clean_data(self, df, min_tokens=None, max_tokens=None, subsample=None):
         
         df = df.copy()
 
@@ -48,3 +48,9 @@ class Preprocessor():
                 stratify=df['target'])
 
         return df
+
+
+class Preprocessor():
+    
+    def __init__(self):
+        pass

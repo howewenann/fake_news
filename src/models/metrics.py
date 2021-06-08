@@ -34,7 +34,7 @@ def calculate_metrics(y_true, probas_pred, best_threshold=0.5):
     acc_score = accuracy_score(y_true=y_true, y_pred=y_pred)
 
     out = {
-        'Class 1 prop': np.mean(y_true),
+        'Class_1_prop': np.mean(y_true),
         'ACC': acc_score,
         'F1': best_f1,
         'AUC': auc_score

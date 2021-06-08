@@ -1,7 +1,10 @@
 # Directories
 # Assuming cwd is at the root folder
 data_raw_dir: 'data/raw'
+data_interim_dir: 'data/interim'
 data_processed_dir: 'data/processed'
+reports_dir: 'reports'
+figures_dir: 'reports/figures'
 
 # filenames
 data_raw_filename: 'IMDB Dataset.csv'

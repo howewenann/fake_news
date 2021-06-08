@@ -60,7 +60,25 @@ class Trainer():
         self.history = None
         self.best_f1 = None
         self.best_threshold = None
+        self.metrics_names = None
 
+        # compile constructor args as a dict (to save)
+        self.params = {
+            'model_dir': self.model_dir, 
+            'model_config': self.model_config,
+            'max_len': self.max_len, 
+            'epochs': self.epochs, 
+            'out_dir': self.out_dir, 
+            'device': self.device,
+            'loss_fn': self.loss_fn, 
+            'optimizer': self.optimizer, 
+            'lr': self.lr, 
+            'scheduler': self.scheduler, 
+            'train_batch_size': self.train_batch_size, 
+            'val_batch_size': self.val_batch_size, 
+            'chunksize': self.chunksize, 
+            'sampler': self.sampler
+        }
 
     # loss function
     def get_loss_function(self, loss_fn, device):
@@ -284,6 +302,9 @@ class Trainer():
             train_metrics['loss'] = train_loss
             val_metrics['loss'] = val_loss
 
+            # save metric names for easier plotting
+            self.metrics_names = [s.lower() for s in list(train_metrics.keys())]
+
             for key in train_metrics.keys():
                 self.history['train_' + key.lower()].append(train_metrics[key])
                 self.history['val_' + key.lower()].append(val_metrics[key])
@@ -305,6 +326,9 @@ class Trainer():
                 # update f1
                 best_f1 = val_metrics['F1']
                 self.best_f1 = best_f1
+
+        # when training is complete, dump parameters used in Trainer class
+        json.dump(self.params, open(Path(self.out_dir, 'trained_model', 'trainer_params.json'), 'w'), indent=4)
 
 
     # call this function for training
