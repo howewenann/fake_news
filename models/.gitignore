@@ -1,3 +1,4 @@
 *.bin
 *.pkl
+*.csv
 /trained_model
