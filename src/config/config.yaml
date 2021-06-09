@@ -5,13 +5,17 @@ data_interim_dir: 'data/interim'
 data_processed_dir: 'data/processed'
 reports_dir: 'reports'
 figures_dir: 'reports/figures'
+predictions_dir: 'models/predictions'
 
 # filenames
 data_raw_filename: 'IMDB Dataset.csv'
-data_processed_filename: 'data_processed.csv'
 
 # seed
 random_state: 42
+
+# get proportion of raw data for E2E testing
+# technically contains both seen and unseen data
+new_data_size: 0.2
 
 # data preprocessing params
 preprocess_config:
