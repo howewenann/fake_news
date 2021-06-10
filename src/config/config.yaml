@@ -10,12 +10,11 @@ predictions_dir: 'models/predictions'
 # filenames
 data_raw_filename: 'IMDB Dataset.csv'
 
+# deploy mode
+deploy: False
+
 # seed
 random_state: 42
-
-# get proportion of raw data for E2E testing
-# technically contains both seen and unseen data
-new_data_size: 0.2
 
 # data preprocessing params
 preprocess_config:

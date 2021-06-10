@@ -1,5 +1,5 @@
 """
-Run this script to execure E2E process for training / evaluation
+Run this script to execure E2E process from raw to prediction
 """
 from pathlib import Path
 import yaml
@@ -20,7 +20,7 @@ def project_path(level):
 root = project_path(0)
 
 # get config file
-with open(Path(root, 'src', 'config', 'config.yaml'), 'r') as file:
+with open(Path(root, 'src', 'config', 'config_deploy.yaml'), 'r') as file:
     config = yaml.load(file, Loader=yaml. FullLoader)
 
 # import modules
@@ -31,11 +31,13 @@ import src.models.predict_model
 import src.visualization.visualize
 
 def run():
-    # src.data.make_dataset.run(config)
-    # src.features.build_features.run(config)
-    # src.models.train_model.run(config)
-    # src.models.predict_model.run(config)
-    src.visualization.visualize.run(config)
+    df = src.data.make_dataset.run(config)
+    df = src.features.build_features.run(config, df)
+    df = src.models.predict_model.run(config, df)
+    df = src.visualization.visualize.run(config, df)
+    
+    # write to predictions folder
+    df.to_csv(Path(root, config['predictions_dir'], 'df_test_pred_deploy.csv'), index=False)
 
 if __name__ == "__main__":
     run()

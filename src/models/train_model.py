@@ -11,6 +11,7 @@ from pathlib import Path
 import yaml
 import json
 import pandas as pd
+import copy
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -41,8 +42,10 @@ with open(Path(root, 'src', 'config', 'config.yaml'), 'r') as file:
 import src.models.training as training
 
 # main function
-def run():
+def run(config):
     
+    config = copy.deepcopy(config)
+
     # check root directory
     logger.info('Root Directory: ' + root)
 
@@ -96,4 +99,4 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    run(config)
