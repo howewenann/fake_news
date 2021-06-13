@@ -1,0 +1,25 @@
+# Directories
+# Assuming cwd is at the root folder
+data_raw_dir: 'data/raw'
+predictions_dir: 'models/predictions'
+
+# filenames
+data_raw_filename: 'new_data.csv'
+
+# deploy mode
+deploy: True
+
+# seed
+random_state: 42
+
+# data preprocessing params
+preprocess_config:
+  min_tokens: 700
+  max_tokens:
+  subsample: 
+
+# test params
+predictor_config:
+  model_dir: 'models'
+  test_batch_size: 32
+  device: 'cpu'

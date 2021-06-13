@@ -11,6 +11,7 @@ from pathlib import Path
 import yaml
 import json
 import pandas as pd
+import copy
 
 from sklearn.metrics import classification_report
 
@@ -63,54 +64,71 @@ def create_html_fig(l, l_names, out_dir):
     return None
 
 
-def run():
+def run(config, df=None):
+
+    config = copy.deepcopy(config)
 
     # check root directory
     logger.info('Root Directory: ' + root)
 
-    # read in processed data
-    df_test_pred_path = Path(root, config['predictions_dir'], 'df_test_pred.csv')
-    logger.info('Read in df_test_pred: ' + str(df_test_pred_path))
-    df_test_pred = pd.read_csv(df_test_pred_path)
-
     # attach root to model_dir
     config['predictor_config']['model_dir'] = str(Path(root, config['predictor_config']['model_dir'], 'trained_model'))
-
-    # Create confusion matrix
-    logger.info('Generate Confusion Matrix...')
-    cm = pd.crosstab(
-        'Class ' + df_test_pred['target'].astype(str), 
-        'Class ' + df_test_pred['pred'].astype(str)
-        )
-    cm.to_html(Path(config['figures_dir'], 'confusion_matrix.html'))
-
-    # create classification report
-    logger.info('Generate Classification Report...')
-    report = classification_report(df_test_pred['target'], df_test_pred['pred'], output_dict=True)
-    report_df = pd.DataFrame(report)
-    report_df.to_html(Path(config['figures_dir'], 'classification_report.html'))
 
     # initialize attention visualizer
     attention_visualizer = AttentionVisualizer(config['predictor_config']['model_dir'])
 
-    # generate attention visualization
-    logger.info('Generate Attention Visualization...')
-    df_test_pred = attention_visualizer.visualize_attention(df_test_pred)
+    if config['deploy']:
 
-    # get all data types
-    true_positives = subset_data_results(df_test_pred, target=1, pred=1, ascending=False, head=30)
-    true_negatives = subset_data_results(df_test_pred, target=0, pred=0, ascending=False, head=30)
-    false_positives = subset_data_results(df_test_pred, target=0, pred=1, ascending=False, head=30)
-    false_negatives = subset_data_results(df_test_pred, target=1, pred=0, ascending=False, head=30)
+        # if deployment mode, create html and append to df
+        df = df.copy()
 
-    # output attention visualizations
-    logger.info('Output Attention Visualization...')
-    create_html_fig(
-        l = [true_positives, true_negatives, false_positives, false_negatives], 
-        l_names = ['true_positives', 'true_negatives', 'false_positives', 'false_negatives'],
-        out_dir = str(Path(root, config['figures_dir']))
-        )
+        # generate attention visualization
+        logger.info('Generate Attention Visualization...')
+        df = attention_visualizer.visualize_attention(df)
+
+        return df
+
+    else:
+
+        # read in processed data
+        df_test_pred_path = Path(root, config['predictions_dir'], 'df_test_pred.csv')
+        logger.info('Read in df_test_pred: ' + str(df_test_pred_path))
+        df_test_pred = pd.read_csv(df_test_pred_path)
+
+        # Create confusion matrix
+        logger.info('Generate Confusion Matrix...')
+        cm = pd.crosstab(
+            'Class ' + df_test_pred['target'].astype(str), 
+            'Class ' + df_test_pred['pred'].astype(str)
+            )
+        cm.to_html(Path(config['figures_dir'], 'confusion_matrix.html'))
+
+        # create classification report
+        logger.info('Generate Classification Report...')
+        report = classification_report(df_test_pred['target'], df_test_pred['pred'], output_dict=True)
+        report_df = pd.DataFrame(report)
+        report_df.to_html(Path(config['figures_dir'], 'classification_report.html'))
+
+        # generate attention visualization
+        logger.info('Generate Attention Visualization...')
+        df_test_pred = attention_visualizer.visualize_attention(df_test_pred)
+
+        # get all data types
+        true_positives = subset_data_results(df_test_pred, target=1, pred=1, ascending=False, head=30)
+        true_negatives = subset_data_results(df_test_pred, target=0, pred=0, ascending=False, head=30)
+        false_positives = subset_data_results(df_test_pred, target=0, pred=1, ascending=False, head=30)
+        false_negatives = subset_data_results(df_test_pred, target=1, pred=0, ascending=False, head=30)
+
+        # output attention visualizations
+        logger.info('Output Attention Visualization...')
+        create_html_fig(
+            l = [true_positives, true_negatives, false_positives, false_negatives], 
+            l_names = ['true_positives', 'true_negatives', 'false_positives', 'false_negatives'],
+            out_dir = str(Path(root, config['figures_dir']))
+            )
+
+        return None
 
 
 if __name__ == "__main__":
-    run()
+    run(config)
