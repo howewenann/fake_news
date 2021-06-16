@@ -36,7 +36,7 @@ root = project_path(0)
 
 # get config file
 with open(Path(root, 'src', 'config', 'config.yaml'), 'r') as file:
-    config = yaml.load(file, Loader=yaml. FullLoader)
+    config = yaml.load(file, Loader=yaml.FullLoader)
 
 # import custom modules
 import src.models.training as training

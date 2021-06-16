@@ -21,7 +21,7 @@ root = project_path(0)
 
 # get config file
 with open(Path(root, 'src', 'config', 'config.yaml'), 'r') as file:
-    config = yaml.load(file, Loader=yaml. FullLoader)
+    config = yaml.load(file, Loader=yaml.FullLoader)
 
 # import modules
 import src.data.make_dataset
