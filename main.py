@@ -31,10 +31,10 @@ import src.models.predict_model
 import src.visualization.visualize
 
 def run():
-    # src.data.make_dataset.run(config)
-    # src.features.build_features.run(config)
-    # src.models.train_model.run(config)
-    # src.models.predict_model.run(config)
+    src.data.make_dataset.run(config)
+    src.features.build_features.run(config)
+    src.models.train_model.run(config)
+    src.models.predict_model.run(config)
     src.visualization.visualize.run(config)
 
 if __name__ == "__main__":
